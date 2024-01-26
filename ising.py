@@ -31,9 +31,24 @@ class Simulation:
         self.method = method
 
     def run(self, number_of_steps):
+        for _ in range(number_of_steps):
+            self._run_step()
+
+    def save_results(self):
         pass
 
-    def run_step(self):
+    def _run_step(self):
+        if self.method == Method.METROPOLIS:
+            self._run_metropolis_step()
+        elif self.method == Method.GLAUBER:
+            self._run_glauber_step()
+        else:
+            raise ValueError("Invalid method")
+
+    def _run_metropolis_step(self):
+        
+
+    def _run_glauber_step(self):
         pass
 
     @staticmethod
@@ -57,3 +72,5 @@ def main():
         initial_state=InitialState.RANDOM,
         method=Method.METROPOLIS,
     )
+    simulation.run(1000)
+    simulation.save_results()
