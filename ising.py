@@ -5,7 +5,7 @@ import dataclasses
 from typing import List
 import json
 
-# set random seed
+# make script deterministic
 np.random.seed(42)
 plt.rcParams.update({"font.size": 25})
 
