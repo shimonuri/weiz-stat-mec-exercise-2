@@ -30,11 +30,24 @@ class Method(enum.Enum):
 
 @dataclasses.dataclass
 class Info:
-    magnetization: List[float]
+    magnetization: List[int]
+    number_of_spins: int
+
+    @property
+    def mean_magnetization(self):
+        return [int(m) / self.number_of_spins for m in self.magnetization]
 
     def to_json(self, output_file):
         with open(output_file, "w") as f:
-            f.write(json.dumps(dataclasses.asdict(self), indent=4))
+            f.write(
+                json.dumps(
+                    {
+                        "magnetization": [int(m) for m in self.magnetization],
+                        "mean_magnetization": self.mean_magnetization,
+                    },
+                    indent=4,
+                )
+            )
 
 
 class Simulation:
@@ -55,6 +68,7 @@ class Simulation:
         self.dim = dim
         self.lattice = self._get_initial_lattice(dim, length, initial_state)
         self.method = method
+        self.number_of_spins = length**dim
         self.info = self._get_init_info()
 
     def run(self, number_of_steps):
@@ -63,7 +77,10 @@ class Simulation:
 
     def show_lattice(self, output_file=None):
         if self.dim == 1:
-            plt.imshow([self.lattice] * 100, cmap="gray")
+            # black for -1, white for 1
+            plt.imshow([self.lattice] * 100, cmap="gray", vmin=-1, vmax=1)
+
+            plt.yticks([])
             if output_file:
                 plt.savefig(output_file, bbox_inches="tight")
                 plt.clf()
@@ -85,7 +102,9 @@ class Simulation:
             plt.show()
 
     def _get_init_info(self):
-        return Info(magnetization=[np.sum(self.lattice)])
+        return Info(
+            number_of_spins=self.number_of_spins, magnetization=[np.sum(self.lattice)]
+        )
 
     def _save_step(self, events):
         spin_flip_events = [event for event in events if isinstance(event, FlipSpin)]
@@ -138,32 +157,72 @@ class Simulation:
 
     @staticmethod
     def _get_initial_lattice(dim, length, initial_state):
-        if initial_state == InitialState.RANDOM:
-            return np.random.choice([-1, 1], size=(length,) * dim)
-        elif initial_state == InitialState.UP:
-            return np.ones((length,) * dim)
+        if initial_state == InitialState.UP:
+            return np.int8(np.ones((length,) * dim))
         elif initial_state == InitialState.DOWN:
-            return -np.ones((length,) * dim)
+            return -np.int8(np.ones((length,) * dim))
+        elif initial_state == InitialState.RANDOM:
+            return np.int8(np.random.choice([-1, 1], size=(length,) * dim))
         else:
             raise ValueError("Invalid initial state")
 
 
-def main():
-    simulation = Simulation(
+def thermalization_period():
+    simulation_random_initial = Simulation(
         length=512,
         temperature=1,
-        magnetic_field=100,
+        magnetic_field=1,
         magnetization_coefficient=1,
         dim=1,
-        initial_state=InitialState.DOWN,
+        initial_state=InitialState.RANDOM,
         method=Method.METROPOLIS,
     )
-    simulation.show_lattice("output/ising_test/lattice_before.png")
-    simulation.run(1000)
-    simulation.show_lattice("output/ising_test/lattice_after.png")
-    simulation.save_results("output/ising_test/data.json")
-    simulation.plot_magnetization("output/ising_test/magnetization.png")
+    simulation_all_up_initial = Simulation(
+        length=512,
+        temperature=1,
+        magnetic_field=1,
+        magnetization_coefficient=1,
+        dim=1,
+        initial_state=InitialState.UP,
+        method=Method.METROPOLIS,
+    )
+    for simulation, name in [
+        (simulation_random_initial, "random_initial"),
+        (simulation_all_up_initial, "all_up_initial"),
+    ]:
+        simulation.show_lattice(
+            f"output/thermalization_period/lattice_{name}_00000.png"
+        )
+        simulation.run(1000)
+        simulation.show_lattice(
+            f"output/thermalization_period/lattice_{name}_01000.png"
+        )
+        simulation.run(9000)
+        simulation.show_lattice(
+            f"output/thermalization_period/lattice_{name}_10000.png"
+        )
+        simulation.save_results(
+            f"output/thermalization_period/results_{name}_10000.json"
+        )
+
+    plt.plot(
+        range(len(simulation_random_initial.info.mean_magnetization)),
+        simulation_random_initial.info.mean_magnetization,
+        label="Random",
+    )
+    plt.plot(
+        range(len(simulation_all_up_initial.info.mean_magnetization)),
+        simulation_all_up_initial.info.mean_magnetization,
+        label="All Up",
+    )
+    plt.xlabel("Step")
+    plt.ylabel("Mean magnetization")
+    plt.legend()
+    plt.savefig(
+        "output/thermalization_period/mean_magnetization.png", bbox_inches="tight"
+    )
+    plt.clf()
 
 
 if __name__ == "__main__":
-    main()
+    thermalization_period()
