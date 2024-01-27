@@ -5,6 +5,7 @@ import dataclasses
 from typing import List
 import json
 import copy
+import os
 
 np.random.seed(42)
 plt.rcParams.update({"font.size": 25})
@@ -26,8 +27,20 @@ class Event:
 
 
 class FlipSpin(Event):
-    def __init__(self, new_value):
+    def __init__(self, spin, new_value):
+        self.spin = spin
         self.new_value = new_value
+
+    def accept(self, simulation):
+        simulation.lattice[self.spin] = self.new_value
+
+
+class NewRandomLattice(Event):
+    def __init__(self, new_lattice):
+        self.new_lattice = new_lattice
+
+    def accept(self, simulation):
+        simulation.lattice = self.new_lattice
 
 
 class Method(enum.Enum):
@@ -124,8 +137,16 @@ class Simulation:
 
     def _save_step(self, events):
         spin_flip_events = [event for event in events if isinstance(event, FlipSpin)]
-        if len(spin_flip_events) == 0:
+        new_random_lattice_events = [
+            event for event in events if isinstance(event, NewRandomLattice)
+        ]
+        if len(spin_flip_events) != 0 and len(new_random_lattice_events) != 0:
+            raise ValueError("Invalid events")
+
+        elif len(spin_flip_events) == 0 and len(new_random_lattice_events) == 0:
             self.info.magnetization.append(self.info.magnetization[-1])
+        elif len(spin_flip_events) == 0:
+            self.info.magnetization.append(np.sum(self.lattice))
         else:
             self.info.magnetization.append(
                 self.info.magnetization[-1]
@@ -142,26 +163,43 @@ class Simulation:
 
         self._save_step(events)
 
+    def _get_potential_events(self):
+        if self.flip_dynamics == FlipDynamics.SINGLE:
+            flip_spin = np.random.randint(0, self.length, size=self.dim)
+            return [FlipSpin(flip_spin, -1 * self.lattice[flip_spin])]
+        elif self.flip_dynamics == FlipDynamics.COMPLETE:
+            new_random_lattice = np.random.choice(
+                [-1, 1], size=(self.length,) * self.dim
+            )
+            return [NewRandomLattice(new_random_lattice)]
+        else:
+            raise ValueError("Invalid flip dynamics")
+
     def _run_metropolis_step(self):
         events = []
-        flip_spin = np.random.randint(0, self.length, size=self.dim)
-        delta_energy = self._get_delta_energy(flip_spin)
-        if delta_energy < 0:
-            self.lattice[flip_spin] *= -1
-            events.append(FlipSpin(self.lattice[flip_spin]))
-        else:
-            if np.random.random() < np.exp(-delta_energy / self.temperature):
-                self.lattice[flip_spin] *= -1
-                events.append(FlipSpin(self.lattice[flip_spin]))
+        potential_events = self._get_potential_events()
+        for potential_event in potential_events:
+            delta_energy = self._get_delta_energy(potential_event)
+            if delta_energy < 0:
+                potential_event.accept(self)
+                events.append(potential_event)
+            else:
+                if np.random.random() < np.exp(-delta_energy / self.temperature):
+                    potential_event.accept(self)
+                    events.append(potential_event)
 
-        return events
+            return events
 
-    def _get_delta_energy(self, flip_spin):
+    def _get_delta_energy(self, event):
         current_energy = self._get_energy(self.lattice)
-        self.lattice[flip_spin] *= -1
-        new_energy = self._get_energy(self.lattice)
-        self.lattice[flip_spin] *= -1
-        return new_energy - current_energy
+        if isinstance(event, FlipSpin):
+            self.lattice[event.spin] = event.new_value
+            energy_diff = self._get_energy(self.lattice) - current_energy
+            self.lattice[event.spin] = event.new_value * -1
+            return energy_diff
+
+        elif isinstance(event, NewRandomLattice):
+            return self._get_energy(event.new_lattice) - current_energy
 
     def _get_energy(self, spins):
         return -self.magnetic_field * np.sum(
@@ -170,15 +208,12 @@ class Simulation:
 
     def _run_glauber_step(self):
         events = []
-        flip_spin = np.random.randint(0, self.length, size=self.dim)
-        delta_energy = self._get_delta_energy(flip_spin)
-        if delta_energy < 0:
-            self.lattice[flip_spin] *= -1
-            events.append(FlipSpin(self.lattice[flip_spin]))
-        else:
+        potential_events = self._get_potential_events()
+        for potential_event in potential_events:
+            delta_energy = self._get_delta_energy(potential_event)
             if np.random.random() < 1 / (1 + np.exp(delta_energy / self.temperature)):
-                self.lattice[flip_spin] *= -1
-                events.append(FlipSpin(self.lattice[flip_spin]))
+                potential_event.accept(self)
+                events.append(potential_event)
 
         return events
 
@@ -194,7 +229,11 @@ class Simulation:
             raise ValueError("Invalid initial state")
 
 
-def thermalization_period():
+def run_thermalization_period(method, flip_dynamics, output_dir):
+    # create outpuut dir if it doesn't exist
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
     simulation_random_initial = Simulation(
         name="random_initial",
         length=512,
@@ -203,8 +242,8 @@ def thermalization_period():
         magnetization_coefficient=1,
         dim=1,
         initial_state=InitialState.RANDOM,
-        method=Method.METROPOLIS,
-        flip_dynamics=FlipDynamics.SINGLE,
+        method=method,
+        flip_dynamics=flip_dynamics,
     )
     simulation_all_up_initial = Simulation(
         name="all_up_initial",
@@ -214,12 +253,12 @@ def thermalization_period():
         magnetization_coefficient=1,
         dim=1,
         initial_state=InitialState.UP,
-        method=Method.METROPOLIS,
-        flip_dynamics=FlipDynamics.SINGLE,
+        method=method,
+        flip_dynamics=flip_dynamics,
     )
     compare_mean_magnetization(
         [simulation_random_initial, simulation_all_up_initial],
-        "output/thermalization_period/",
+        output_dir,
     )
 
 
@@ -248,7 +287,7 @@ def method_comparison():
     )
     compare_mean_magnetization(
         [metropolis_simulation, glauber_simulation],
-        "output/method_comparison/",
+        "output/method_comparison",
     )
 
 
@@ -275,6 +314,29 @@ def compare_mean_magnetization(simulations, output_dir):
     plt.clf()
 
 
+def run_thermalization_periods():
+    run_thermalization_period(
+        Method.METROPOLIS,
+        FlipDynamics.SINGLE,
+        "output/thermalization/metropolis/single",
+    )
+    run_thermalization_period(
+        Method.METROPOLIS,
+        FlipDynamics.COMPLETE,
+        "output/thermalization/metropolis/complete",
+    )
+    run_thermalization_period(
+        Method.GLAUBER,
+        FlipDynamics.SINGLE,
+        "output/thermalization/glauber/single",
+    )
+    run_thermalization_period(
+        Method.GLAUBER,
+        FlipDynamics.COMPLETE,
+        "output/thermalization/glauber/complete",
+    )
+
+
 if __name__ == "__main__":
-    # thermalization_period()
+    # run_thermalization_periods()
     method_comparison()
