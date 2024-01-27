@@ -5,6 +5,8 @@ import dataclasses
 from typing import List
 import json
 
+# set random seed
+np.random.seed(42)
 plt.rcParams.update({"font.size": 25})
 
 
@@ -12,6 +14,11 @@ class InitialState(enum.Enum):
     RANDOM = 0
     UP = 1
     DOWN = 2
+
+
+class FlipDynamics(enum.Enum):
+    SINGLE = 0
+    COMPLETE = 1
 
 
 class Event:
@@ -60,6 +67,7 @@ class Simulation:
         dim,
         initial_state=InitialState.RANDOM,
         method=Method.METROPOLIS,
+        flip_dynamics=FlipDynamics.SINGLE,
     ):
         self.length = length
         self.temperature = temperature
@@ -68,6 +76,7 @@ class Simulation:
         self.dim = dim
         self.lattice = self._get_initial_lattice(dim, length, initial_state)
         self.method = method
+        self.flip_dynamics = flip_dynamics
         self.number_of_spins = length**dim
         self.info = self._get_init_info()
 
@@ -153,7 +162,18 @@ class Simulation:
         ) - self.magnetization_coefficient * np.sum(spins * np.roll(spins, 1, axis=0))
 
     def _run_glauber_step(self):
-        return []
+        events = []
+        flip_spin = np.random.randint(0, self.length, size=self.dim)
+        delta_energy = self._get_delta_energy(flip_spin)
+        if delta_energy < 0:
+            self.lattice[flip_spin] *= -1
+            events.append(FlipSpin(self.lattice[flip_spin]))
+        else:
+            if np.random.random() < 1 / (1 + np.exp(delta_energy / self.temperature)):
+                self.lattice[flip_spin] *= -1
+                events.append(FlipSpin(self.lattice[flip_spin]))
+
+        return events
 
     @staticmethod
     def _get_initial_lattice(dim, length, initial_state):
@@ -176,6 +196,7 @@ def thermalization_period():
         dim=1,
         initial_state=InitialState.RANDOM,
         method=Method.METROPOLIS,
+        flip_dynamics=FlipDynamics.SINGLE,
     )
     simulation_all_up_initial = Simulation(
         length=512,
@@ -185,6 +206,7 @@ def thermalization_period():
         dim=1,
         initial_state=InitialState.UP,
         method=Method.METROPOLIS,
+        flip_dynamics=FlipDynamics.SINGLE,
     )
     for simulation, name in [
         (simulation_random_initial, "random_initial"),
