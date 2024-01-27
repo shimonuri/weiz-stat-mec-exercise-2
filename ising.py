@@ -4,8 +4,8 @@ from matplotlib import pyplot as plt
 import dataclasses
 from typing import List
 import json
+import copy
 
-# make script deterministic
 np.random.seed(42)
 plt.rcParams.update({"font.size": 25})
 
@@ -60,6 +60,7 @@ class Info:
 class Simulation:
     def __init__(
         self,
+        name,
         length,
         temperature,
         magnetic_field,
@@ -68,13 +69,19 @@ class Simulation:
         initial_state=InitialState.RANDOM,
         method=Method.METROPOLIS,
         flip_dynamics=FlipDynamics.SINGLE,
+        initial_lattice=None,
     ):
+        self.name = name
         self.length = length
         self.temperature = temperature
         self.magnetic_field = magnetic_field
         self.magnetization_coefficient = magnetization_coefficient
         self.dim = dim
-        self.lattice = self._get_initial_lattice(dim, length, initial_state)
+        if initial_lattice is not None:
+            self.lattice = copy.deepcopy(initial_lattice)
+        else:
+            self.lattice = self._get_initial_lattice(dim, length, initial_state)
+
         self.method = method
         self.flip_dynamics = flip_dynamics
         self.number_of_spins = length**dim
@@ -189,6 +196,7 @@ class Simulation:
 
 def thermalization_period():
     simulation_random_initial = Simulation(
+        name="random_initial",
         length=512,
         temperature=1,
         magnetic_field=1,
@@ -199,6 +207,7 @@ def thermalization_period():
         flip_dynamics=FlipDynamics.SINGLE,
     )
     simulation_all_up_initial = Simulation(
+        name="all_up_initial",
         length=512,
         temperature=1,
         magnetic_field=1,
@@ -208,43 +217,64 @@ def thermalization_period():
         method=Method.METROPOLIS,
         flip_dynamics=FlipDynamics.SINGLE,
     )
-    for simulation, name in [
-        (simulation_random_initial, "random_initial"),
-        (simulation_all_up_initial, "all_up_initial"),
-    ]:
-        simulation.show_lattice(
-            f"output/thermalization_period/lattice_{name}_00000.png"
-        )
+    compare_mean_magnetization(
+        [simulation_random_initial, simulation_all_up_initial],
+        "output/thermalization_period/",
+    )
+
+
+def method_comparison():
+    metropolis_simulation = Simulation(
+        name="metropolis",
+        length=512,
+        temperature=1,
+        magnetic_field=1,
+        magnetization_coefficient=1,
+        dim=1,
+        initial_state=InitialState.RANDOM,
+        method=Method.METROPOLIS,
+        flip_dynamics=FlipDynamics.SINGLE,
+    )
+    glauber_simulation = Simulation(
+        name="glauber",
+        length=512,
+        temperature=1,
+        magnetic_field=1,
+        magnetization_coefficient=1,
+        dim=1,
+        initial_lattice=metropolis_simulation.lattice,
+        method=Method.GLAUBER,
+        flip_dynamics=FlipDynamics.SINGLE,
+    )
+    compare_mean_magnetization(
+        [metropolis_simulation, glauber_simulation],
+        "output/method_comparison/",
+    )
+
+
+def compare_mean_magnetization(simulations, output_dir):
+    for simulation in simulations:
+        simulation.show_lattice(f"{output_dir}/lattice_{simulation.name}_00000.png")
         simulation.run(1000)
-        simulation.show_lattice(
-            f"output/thermalization_period/lattice_{name}_01000.png"
-        )
+        simulation.show_lattice(f"{output_dir}/lattice_{simulation.name}_01000.png")
         simulation.run(9000)
-        simulation.show_lattice(
-            f"output/thermalization_period/lattice_{name}_10000.png"
-        )
-        simulation.save_results(
-            f"output/thermalization_period/results_{name}_10000.json"
+        simulation.show_lattice(f"{output_dir}/lattice_{simulation.name}_10000.png")
+        simulation.save_results(f"{output_dir}/results_{simulation.name}_10000.json")
+
+    for simulation in simulations:
+        plt.plot(
+            range(len(simulation.info.mean_magnetization)),
+            simulation.info.mean_magnetization,
+            label=simulation.name.capitalize().replace("_", " "),
         )
 
-    plt.plot(
-        range(len(simulation_random_initial.info.mean_magnetization)),
-        simulation_random_initial.info.mean_magnetization,
-        label="Random",
-    )
-    plt.plot(
-        range(len(simulation_all_up_initial.info.mean_magnetization)),
-        simulation_all_up_initial.info.mean_magnetization,
-        label="All Up",
-    )
     plt.xlabel("Step")
     plt.ylabel("Mean magnetization")
     plt.legend()
-    plt.savefig(
-        "output/thermalization_period/mean_magnetization.png", bbox_inches="tight"
-    )
+    plt.savefig(f"{output_dir}/mean_magnetization.png", bbox_inches="tight")
     plt.clf()
 
 
 if __name__ == "__main__":
-    thermalization_period()
+    # thermalization_period()
+    method_comparison()
