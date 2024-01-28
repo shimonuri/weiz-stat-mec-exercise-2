@@ -338,5 +338,5 @@ def run_thermalization_periods():
 
 
 if __name__ == "__main__":
-    # run_thermalization_periods()
-    method_comparison()
+    run_thermalization_periods()
+    # method_comparison()
