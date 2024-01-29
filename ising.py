@@ -69,7 +69,7 @@ class Info:
 
     def get_number_of_steps_to_mean_magnetization(self, mean_magnetization):
         # return the number of steps to reach the given magnetization
-        for i, m in enumerate(self.mean_magnetization):
+        for i, m in enumerate(self.mean_magnetization_per_step):
             if m >= mean_magnetization:
                 return i
 
@@ -493,6 +493,7 @@ def plot_steps_to_magnetization(output_dir=None):
 
 
 if __name__ == "__main__":
-    run_thermalization_periods()
+    # run_thermalization_periods()
     # plot_random_step_probability(512, 100, "output/random_step_probability")
     # plot_steps_to_magnetization("output/steps_to_magnetization")
+    pass
