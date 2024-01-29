@@ -200,42 +200,48 @@ class Simulation:
         for potential_event in potential_events:
             delta_energy = self._get_delta_energy(potential_event)
             if delta_energy < 0:
-                potential_event.accept(self)
+                self._accept_event(potential_event, delta_energy)
                 events.append(potential_event)
             else:
                 if np.random.random() < np.exp(-delta_energy / self.temperature):
-                    potential_event.accept(self)
+                    self._accept_event(potential_event, delta_energy)
                     events.append(potential_event)
 
             return events
 
     def _get_delta_energy(self, event):
         if isinstance(event, FlipSpin):
-            if event.spin == 0:
-                prev_spin = 0
-                next_spin = self.lattice[event.spin + 1]
-            elif event.spin == self.length - 1:
-                prev_spin = self.lattice[event.spin - 1]
-                next_spin = 0
-            else:
-                prev_spin = self.lattice[event.spin - 1]
-                next_spin = self.lattice[event.spin + 1]
-
-            energy_diff = 2 * (
-                self.magnetic_field * event.old_value
-                + self.magnetization_coefficient
-                * event.old_value
-                * (next_spin + prev_spin)
-            )
-            return energy_diff
+            return self._get_flip_spin_energy_diff(event)
 
         elif isinstance(event, NewRandomLattice):
             return self._get_energy(event.new_lattice) - self.current_energy
+
+    def _get_flip_spin_energy_diff(self, spin_flip):
+        if spin_flip.spin == 0:
+            prev_spin = 0
+            next_spin = self.lattice[spin_flip.spin + 1]
+        elif spin_flip.spin == self.length - 1:
+            prev_spin = self.lattice[spin_flip.spin - 1]
+            next_spin = 0
+        else:
+            prev_spin = self.lattice[spin_flip.spin - 1]
+            next_spin = self.lattice[spin_flip.spin + 1]
+        energy_diff = 2 * (
+            self.magnetic_field * spin_flip.old_value
+            + self.magnetization_coefficient
+            * spin_flip.old_value
+            * (next_spin + prev_spin)
+        )
+        return energy_diff
 
     def _get_energy(self, spins):
         return -self.magnetic_field * np.sum(
             spins
         ) - self.magnetization_coefficient * np.sum(spins * np.roll(spins, 1, axis=0))
+
+    def _accept_event(self, event, energy_diff):
+        event.accept(self)
+        self.current_energy += energy_diff
 
     def _run_glauber_step(self):
         events = []
@@ -243,7 +249,7 @@ class Simulation:
         for potential_event in potential_events:
             delta_energy = self._get_delta_energy(potential_event)
             if np.random.random() < 1 / (1 + np.exp(delta_energy / self.temperature)):
-                potential_event.accept(self)
+                self._accept_event(potential_event, delta_energy)
                 events.append(potential_event)
 
         return events
@@ -493,7 +499,6 @@ def plot_steps_to_magnetization(output_dir=None):
 
 
 if __name__ == "__main__":
-    # run_thermalization_periods()
+    run_thermalization_periods()
     # plot_random_step_probability(512, 100, "output/random_step_probability")
     # plot_steps_to_magnetization("output/steps_to_magnetization")
-    pass
