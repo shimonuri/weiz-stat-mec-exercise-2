@@ -430,7 +430,7 @@ def compare_steps_to_magnetization(
 
     plt.xlabel("Magnetization")
     plt.ylabel("Steps to Reach")
-    plt.xticks([0, 0.3, 0.6, 0.9])
+    plt.xticks([0, 0.3, 0.6, 0.99])
     plt.grid()
     plt.legend()
     if output_file:
@@ -469,7 +469,7 @@ def plot_steps_to_magnetization(output_dir=None):
     compare_steps_to_magnetization(
         [metropolis_simulation, glauber_simulation],
         10000,
-        [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+        [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.99],
         100,
         output_file=f"{output_dir}/steps_to_magnetization.png" if output_dir else None,
     )
