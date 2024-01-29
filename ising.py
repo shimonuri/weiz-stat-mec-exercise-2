@@ -1,4 +1,5 @@
 import numpy as np
+import math
 import enum
 from matplotlib import pyplot as plt
 import dataclasses
@@ -19,7 +20,7 @@ class InitialState(enum.Enum):
 
 class FlipDynamics(enum.Enum):
     SINGLE = 0
-    COMPLETE = 1
+    COMPLETE_RANDOM_STEP = 1
 
 
 class Event:
@@ -56,6 +57,14 @@ class Info:
     @property
     def mean_magnetization(self):
         return [int(m) / self.number_of_spins for m in self.magnetization]
+
+    def get_number_of_steps_to_mean_magnetization(self, mean_magnetization):
+        # return the number of steps to reach the given magnetization
+        for i, m in enumerate(self.mean_magnetization):
+            if m >= mean_magnetization:
+                return i
+
+        raise ValueError("Magnetization not reached")
 
     def to_json(self, output_file):
         with open(output_file, "w") as f:
@@ -167,7 +176,7 @@ class Simulation:
         if self.flip_dynamics == FlipDynamics.SINGLE:
             flip_spin = np.random.randint(0, self.length, size=self.dim)
             return [FlipSpin(flip_spin, -1 * self.lattice[flip_spin])]
-        elif self.flip_dynamics == FlipDynamics.COMPLETE:
+        elif self.flip_dynamics == FlipDynamics.COMPLETE_RANDOM_STEP:
             new_random_lattice = np.random.choice(
                 [-1, 1], size=(self.length,) * self.dim
             )
@@ -229,9 +238,9 @@ class Simulation:
             raise ValueError("Invalid initial state")
 
 
-def run_thermalization_period(method, flip_dynamics, output_dir):
+def run_thermalization_period(method, flip_dynamics, output_dir=None):
     # create outpuut dir if it doesn't exist
-    if not os.path.exists(output_dir):
+    if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
     simulation_random_initial = Simulation(
@@ -291,14 +300,19 @@ def method_comparison():
     )
 
 
-def compare_mean_magnetization(simulations, output_dir):
+def compare_mean_magnetization(simulations, output_dir=None):
     for simulation in simulations:
-        simulation.show_lattice(f"{output_dir}/lattice_{simulation.name}_00000.png")
+        if output_dir:
+            simulation.show_lattice(f"{output_dir}/lattice_{simulation.name}_00000.png")
         simulation.run(1000)
-        simulation.show_lattice(f"{output_dir}/lattice_{simulation.name}_01000.png")
+        if output_dir:
+            simulation.show_lattice(f"{output_dir}/lattice_{simulation.name}_01000.png")
         simulation.run(9000)
-        simulation.show_lattice(f"{output_dir}/lattice_{simulation.name}_10000.png")
-        simulation.save_results(f"{output_dir}/results_{simulation.name}_10000.json")
+        if output_dir:
+            simulation.show_lattice(f"{output_dir}/lattice_{simulation.name}_10000.png")
+            simulation.save_results(
+                f"{output_dir}/results_{simulation.name}_10000.json"
+            )
 
     for simulation in simulations:
         plt.plot(
@@ -310,33 +324,156 @@ def compare_mean_magnetization(simulations, output_dir):
     plt.xlabel("Step")
     plt.ylabel("Mean magnetization")
     plt.legend()
-    plt.savefig(f"{output_dir}/mean_magnetization.png", bbox_inches="tight")
-    plt.clf()
+    if output_dir:
+        plt.savefig(f"{output_dir}/mean_magnetization.png", bbox_inches="tight")
+        plt.clf()
+    else:
+        plt.show()
+
+
+def get_probability_of_complete_random(size, magnetization, attempts):
+    p = (magnetization + 1) / 2
+    p_star = sum(
+        [math.comb(size, n) * 0.5**512 for n in range(int(p * size), size + 1)]
+    )
+    return sum(
+        [
+            p_star**i * (1 - p_star) ** (attempts - i) * math.comb(attempts, i)
+            for i in range(1, attempts + 1)
+        ]
+    )
 
 
 def run_thermalization_periods():
+    # run_thermalization_period(
+    #     Method.METROPOLIS,
+    #     FlipDynamics.SINGLE,
+    #     "output/thermalization/metropolis/single",
+    # )
     run_thermalization_period(
         Method.METROPOLIS,
-        FlipDynamics.SINGLE,
-        "output/thermalization/metropolis/single",
+        FlipDynamics.COMPLETE_RANDOM_STEP,
+        # "output/thermalization/metropolis/complete",
     )
-    run_thermalization_period(
-        Method.METROPOLIS,
-        FlipDynamics.COMPLETE,
-        "output/thermalization/metropolis/complete",
+    # run_thermalization_period(
+    #     Method.GLAUBER,
+    #     FlipDynamics.SINGLE,
+    #     "output/thermalization/glauber/single",
+    # )
+    # run_thermalization_period(
+    #     Method.GLAUBER,
+    #     FlipDynamics.COMPLETE_RANDOM_STEP,
+    #     "output/thermalization/glauber/complete",
+    # )
+
+
+def plot_random_step_probability(size, attempts, output_dir=None):
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    magnetization = np.linspace(0, 1, 100)
+    plt.plot(
+        magnetization,
+        [get_probability_of_complete_random(size, m, attempts) for m in magnetization],
     )
-    run_thermalization_period(
-        Method.GLAUBER,
-        FlipDynamics.SINGLE,
-        "output/thermalization/glauber/single",
-    )
-    run_thermalization_period(
-        Method.GLAUBER,
-        FlipDynamics.COMPLETE,
-        "output/thermalization/glauber/complete",
+    plt.xlabel("Magnetization")
+    plt.ylabel("Finding Probability")
+    plt.xticks([0, 0.2, 0.4, 0.6, 0.8, 1])
+    plt.axvline(x=0.13, color="red", linestyle="--", label="$M=0.13$")
+    plt.legend()
+    if output_dir:
+        plt.savefig(f"{output_dir}/random_step_probability.png", bbox_inches="tight")
+        plt.clf()
+    else:
+        plt.show()
+
+
+def compare_steps_to_magnetization(
+    simulation_configurations,
+    number_of_steps,
+    magnetizations,
+    number_of_simulations,
+    output_file,
+):
+    random_lattices = [
+        np.int8(
+            np.random.choice(
+                [-1, 1],
+                size=(simulation_configurations[0]["length"],)
+                * simulation_configurations[0]["dim"],
+            )
+        )
+        for _ in range(number_of_simulations)
+    ]
+    for simulation_configuration in simulation_configurations:
+        steps_to_reach = [0 for _ in range(len(magnetizations))]
+        for random_lattice in random_lattices:
+            simulation = Simulation(
+                **simulation_configuration,
+                initial_lattice=random_lattice,
+            )
+            simulation.run(number_of_steps)
+            for i, magnetization in enumerate(magnetizations):
+                steps_to_reach[
+                    i
+                ] += simulation.info.get_number_of_steps_to_mean_magnetization(
+                    magnetization
+                )
+        steps_to_reach = [n / number_of_simulations for n in steps_to_reach]
+        plt.plot(
+            magnetizations,
+            steps_to_reach,
+            label=simulation.name.capitalize().replace("_", " "),
+            marker="o",
+            linestyle="",
+        )
+
+    plt.xlabel("Magnetization")
+    plt.ylabel("Steps to Reach")
+    plt.xticks([0, 0.3, 0.6, 0.9])
+    plt.grid()
+    plt.legend()
+    if output_file:
+        plt.savefig(output_file, bbox_inches="tight")
+        plt.clf()
+    else:
+        plt.show()
+
+
+def plot_steps_to_magnetization(output_dir=None):
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    metropolis_simulation = {
+        "name": "metropolis",
+        "length": 512,
+        "temperature": 1,
+        "magnetic_field": 1,
+        "magnetization_coefficient": 1,
+        "dim": 1,
+        "initial_state": InitialState.RANDOM,
+        "method": Method.METROPOLIS,
+        "flip_dynamics": FlipDynamics.SINGLE,
+    }
+    glauber_simulation = {
+        "name": "glauber",
+        "length": 512,
+        "temperature": 1,
+        "magnetic_field": 1,
+        "magnetization_coefficient": 1,
+        "dim": 1,
+        "initial_state": InitialState.RANDOM,
+        "method": Method.GLAUBER,
+        "flip_dynamics": FlipDynamics.SINGLE,
+    }
+    compare_steps_to_magnetization(
+        [metropolis_simulation, glauber_simulation],
+        10000,
+        [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+        100,
+        output_file=f"{output_dir}/steps_to_magnetization.png" if output_dir else None,
     )
 
 
 if __name__ == "__main__":
-    run_thermalization_periods()
-    # method_comparison()
+    plot_steps_to_magnetization("output/steps_to_magnetization")
