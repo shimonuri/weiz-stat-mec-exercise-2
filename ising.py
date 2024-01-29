@@ -31,6 +31,7 @@ class FlipSpin(Event):
     def __init__(self, spin, new_value):
         self.spin = spin
         self.new_value = new_value
+        self.old_value = -1 * new_value
 
     def accept(self, simulation):
         simulation.lattice[self.spin] = self.new_value
@@ -56,7 +57,15 @@ class Info:
 
     @property
     def mean_magnetization(self):
-        return [int(m) / self.number_of_spins for m in self.magnetization]
+        return [
+            np.mean(self.magnetization[i : i + self.number_of_spins])
+            / self.number_of_spins
+            for i in range(0, len(self.magnetization), self.number_of_spins)
+        ]
+
+    @property
+    def mean_magnetization_per_step(self):
+        return [m / self.number_of_spins for m in self.magnetization]
 
     def get_number_of_steps_to_mean_magnetization(self, mean_magnetization):
         # return the number of steps to reach the given magnetization
@@ -108,9 +117,10 @@ class Simulation:
         self.flip_dynamics = flip_dynamics
         self.number_of_spins = length**dim
         self.info = self._get_init_info()
+        self.current_energy = self._get_energy(self.lattice)
 
-    def run(self, number_of_steps):
-        for _ in range(number_of_steps):
+    def run(self, number_of_sweeps):
+        for _ in range(number_of_sweeps * self.number_of_spins):
             self._run_step()
 
     def show_lattice(self, output_file=None):
@@ -200,15 +210,27 @@ class Simulation:
             return events
 
     def _get_delta_energy(self, event):
-        current_energy = self._get_energy(self.lattice)
         if isinstance(event, FlipSpin):
-            self.lattice[event.spin] = event.new_value
-            energy_diff = self._get_energy(self.lattice) - current_energy
-            self.lattice[event.spin] = event.new_value * -1
+            if event.spin == 0:
+                prev_spin = 0
+                next_spin = self.lattice[event.spin + 1]
+            elif event.spin == self.length - 1:
+                prev_spin = self.lattice[event.spin - 1]
+                next_spin = 0
+            else:
+                prev_spin = self.lattice[event.spin - 1]
+                next_spin = self.lattice[event.spin + 1]
+
+            energy_diff = 2 * (
+                self.magnetic_field * event.old_value
+                + self.magnetization_coefficient
+                * event.old_value
+                * (next_spin + prev_spin)
+            )
             return energy_diff
 
         elif isinstance(event, NewRandomLattice):
-            return self._get_energy(event.new_lattice) - current_energy
+            return self._get_energy(event.new_lattice) - self.current_energy
 
     def _get_energy(self, spins):
         return -self.magnetic_field * np.sum(
@@ -303,16 +325,11 @@ def method_comparison():
 def compare_mean_magnetization(simulations, output_dir=None):
     for simulation in simulations:
         if output_dir:
-            simulation.show_lattice(f"{output_dir}/lattice_{simulation.name}_00000.png")
-        simulation.run(1000)
+            simulation.show_lattice(f"{output_dir}/lattice_{simulation.name}_0.png")
+        simulation.run(20)
         if output_dir:
-            simulation.show_lattice(f"{output_dir}/lattice_{simulation.name}_01000.png")
-        simulation.run(9000)
-        if output_dir:
-            simulation.show_lattice(f"{output_dir}/lattice_{simulation.name}_10000.png")
-            simulation.save_results(
-                f"{output_dir}/results_{simulation.name}_10000.json"
-            )
+            simulation.show_lattice(f"{output_dir}/lattice_{simulation.name}_1.png")
+            simulation.save_results(f"{output_dir}/results_{simulation.name}_1.json")
 
     for simulation in simulations:
         plt.plot(
@@ -321,7 +338,7 @@ def compare_mean_magnetization(simulations, output_dir=None):
             label=simulation.name.capitalize().replace("_", " "),
         )
 
-    plt.xlabel("Step")
+    plt.xlabel("Sweeps")
     plt.ylabel("Mean magnetization")
     plt.legend()
     if output_dir:
@@ -476,6 +493,6 @@ def plot_steps_to_magnetization(output_dir=None):
 
 
 if __name__ == "__main__":
-    # run_thermalization_periods()
+    run_thermalization_periods()
     # plot_random_step_probability(512, 100, "output/random_step_probability")
-    plot_steps_to_magnetization("output/steps_to_magnetization")
+    # plot_steps_to_magnetization("output/steps_to_magnetization")
