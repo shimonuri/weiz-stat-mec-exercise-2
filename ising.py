@@ -53,6 +53,7 @@ class Method(enum.Enum):
 @dataclasses.dataclass
 class Info:
     magnetization: List[int]
+    energy: List[float]
     number_of_spins: int
 
     @property
@@ -61,6 +62,12 @@ class Info:
             np.mean(self.magnetization[i : i + self.number_of_spins])
             / self.number_of_spins
             for i in range(0, len(self.magnetization), self.number_of_spins)
+        ]
+
+    def mean_energy(self):
+        return [
+            np.mean(self.energy[i : i + self.number_of_spins])
+            for i in range(0, len(self.energy), self.number_of_spins)
         ]
 
     @property
@@ -139,10 +146,21 @@ class Simulation:
         # save self.info as json
         self.info.to_json(output_file)
 
-    def plot_magnetization(self, output_file=None):
-        plt.plot(range(len(self.info.magnetization)), self.info.magnetization)
-        plt.xlabel("Step")
+    def plot_mean_magnetization(self, output_file=None):
+        plt.plot(range(len(self.info.mean_magnetization)), self.info.mean_magnetization)
+        plt.xlabel("Sweep")
         plt.ylabel("Magnetization")
+        if output_file:
+            plt.savefig(output_file, bbox_inches="tight")
+            plt.clf()
+        else:
+            plt.show()
+
+    def plot_mean_energy(self, output_file=None):
+        mean_energy = self.info.mean_energy()
+        plt.plot(range(len(mean_energy)), mean_energy)
+        plt.xlabel("Sweep")
+        plt.ylabel("Energy")
         if output_file:
             plt.savefig(output_file, bbox_inches="tight")
             plt.clf()
@@ -151,7 +169,9 @@ class Simulation:
 
     def _get_init_info(self):
         return Info(
-            number_of_spins=self.number_of_spins, magnetization=[np.sum(self.lattice)]
+            number_of_spins=self.number_of_spins,
+            energy=[self._get_energy(self.lattice)],
+            magnetization=[np.sum(self.lattice)],
         )
 
     def _save_step(self, events):
@@ -164,13 +184,16 @@ class Simulation:
 
         elif len(spin_flip_events) == 0 and len(new_random_lattice_events) == 0:
             self.info.magnetization.append(self.info.magnetization[-1])
+            self.info.energy.append(self.current_energy)
         elif len(spin_flip_events) == 0:
             self.info.magnetization.append(np.sum(self.lattice))
+            self.info.energy.append(self.current_energy)
         else:
             self.info.magnetization.append(
                 self.info.magnetization[-1]
                 + 2 * np.sum([spin_flip.new_value for spin_flip in spin_flip_events])
             )
+            self.info.energy.append(self.current_energy)
 
     def _run_step(self):
         if self.method == Method.METROPOLIS:
@@ -232,7 +255,7 @@ class Simulation:
             * spin_flip.old_value
             * (next_spin + prev_spin)
         )
-        return energy_diff
+        return float(energy_diff)
 
     def _get_energy(self, spins):
         return -self.magnetic_field * np.sum(
@@ -498,7 +521,25 @@ def plot_steps_to_magnetization(output_dir=None):
     )
 
 
+def run_chosen_simulation():
+    simulation = Simulation(
+        name="metropolis",
+        length=512,
+        temperature=1,
+        magnetic_field=1,
+        magnetization_coefficient=1,
+        dim=1,
+        initial_state=InitialState.UP,
+        method=Method.METROPOLIS,
+        flip_dynamics=FlipDynamics.SINGLE,
+    )
+    simulation.run(20)
+    # simulation.plot_mean_magnetization()
+    print(np.mean(simulation.info.mean_energy()))
+
+
 if __name__ == "__main__":
-    run_thermalization_periods()
+    # run_thermalization_periods()
     # plot_random_step_probability(512, 100, "output/random_step_probability")
     # plot_steps_to_magnetization("output/steps_to_magnetization")
+    run_chosen_simulation()
