@@ -345,26 +345,26 @@ def get_probability_of_complete_random(size, magnetization, attempts):
 
 
 def run_thermalization_periods():
-    # run_thermalization_period(
-    #     Method.METROPOLIS,
-    #     FlipDynamics.SINGLE,
-    #     "output/thermalization/metropolis/single",
-    # )
+    run_thermalization_period(
+        Method.METROPOLIS,
+        FlipDynamics.SINGLE,
+        "output/thermalization/metropolis/single",
+    )
     run_thermalization_period(
         Method.METROPOLIS,
         FlipDynamics.COMPLETE_RANDOM_STEP,
-        # "output/thermalization/metropolis/complete",
+        "output/thermalization/metropolis/complete",
     )
-    # run_thermalization_period(
-    #     Method.GLAUBER,
-    #     FlipDynamics.SINGLE,
-    #     "output/thermalization/glauber/single",
-    # )
-    # run_thermalization_period(
-    #     Method.GLAUBER,
-    #     FlipDynamics.COMPLETE_RANDOM_STEP,
-    #     "output/thermalization/glauber/complete",
-    # )
+    run_thermalization_period(
+        Method.GLAUBER,
+        FlipDynamics.SINGLE,
+        "output/thermalization/glauber/single",
+    )
+    run_thermalization_period(
+        Method.GLAUBER,
+        FlipDynamics.COMPLETE_RANDOM_STEP,
+        "output/thermalization/glauber/complete",
+    )
 
 
 def plot_random_step_probability(size, attempts, output_dir=None):
@@ -476,4 +476,6 @@ def plot_steps_to_magnetization(output_dir=None):
 
 
 if __name__ == "__main__":
+    # run_thermalization_periods()
+    # plot_random_step_probability(512, 100, "output/random_step_probability")
     plot_steps_to_magnetization("output/steps_to_magnetization")
