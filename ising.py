@@ -52,9 +52,10 @@ class Method(enum.Enum):
 
 @dataclasses.dataclass
 class Info:
-    magnetization: List[int]
+    magnetization: List[float]
     energy: List[float]
     number_of_spins: int
+    temperature: float
     correlation: List[np.ndarray] = dataclasses.field(default_factory=list)
 
     @property
@@ -79,11 +80,11 @@ class Info:
 
     @property
     def mean_energy(self):
-        return np.mean(self.mean_energies)
+        return np.mean(self.mean_energies[100:])
 
     @property
     def specific_heat(self):
-        return np.var(self.mean_energies)
+        return np.var(self.mean_energies) / (self.temperature**2)
 
     @property
     def mean_magnetization_per_step(self):
@@ -147,10 +148,12 @@ class Simulation:
         self.current_energy = self._get_energy(self.lattice)
         self.step_made = 0
 
-    def run(self, number_of_sweeps):
+    def run(self, number_of_sweeps, should_save=True):
         for _ in range(number_of_sweeps * self.number_of_spins):
-            self._run_step()
-            self.step_made += 1
+            events = self._run_step()
+            if should_save:
+                self.step_made += 1
+                self._save_step(events)
 
     def show_lattice(self, output_file=None):
         if self.dim == 1:
@@ -194,6 +197,7 @@ class Simulation:
             number_of_spins=self.number_of_spins,
             energy=[self._get_energy(self.lattice)],
             magnetization=[np.sum(self.lattice)],
+            temperature=self.temperature,
         )
 
     def _save_step(self, events):
@@ -228,7 +232,7 @@ class Simulation:
         else:
             raise ValueError("Invalid method")
 
-        self._save_step(events)
+        return events
 
     def _get_potential_events(self):
         if self.flip_dynamics == FlipDynamics.SINGLE:
@@ -554,6 +558,7 @@ def run_chosen_simulation(output_dir=None):
         method=Method.METROPOLIS,
         flip_dynamics=FlipDynamics.SINGLE,
     )
+    simulation.run(200, should_save=False)
     simulation.run(1000)
     plt.plot(simulation.info.mean_correlation)
     plt.xlabel("Distance")
