@@ -57,34 +57,52 @@ class Info:
     energy: List[float]
     number_of_spins: int
     temperature: float
+    sweeps_to_average: int
     correlation: List[np.ndarray] = dataclasses.field(default_factory=list)
 
     @property
     def mean_magnetization(self):
         return [
-            np.mean(self.magnetization[i : i + self.number_of_spins])
+            np.mean(
+                self.magnetization[
+                    i : i + self.number_of_spins * self.sweeps_to_average
+                ]
+            )
             / self.number_of_spins
-            for i in range(0, len(self.magnetization), self.number_of_spins)
+            for i in range(
+                0,
+                len(self.magnetization),
+                self.number_of_spins * self.sweeps_to_average,
+            )
         ]
 
     @property
     def mean_magnetization_at_end_of_sweep(self):
         return [
             self.magnetization[i] / self.number_of_spins
-            for i in range(0, len(self.magnetization), self.number_of_spins)
+            for i in range(
+                0,
+                len(self.magnetization),
+                self.number_of_spins * self.sweeps_to_average,
+            )
         ]
 
     @property
     def mean_energies(self):
         return [
-            np.mean(self.energy[i : i + self.number_of_spins])
-            for i in range(0, len(self.energy), self.number_of_spins)
+            np.mean(self.energy[i : i + self.number_of_spins * self.sweeps_to_average])
+            for i in range(
+                0, len(self.energy), self.number_of_spins * self.sweeps_to_average
+            )
         ]
 
     @property
     def mean_energies_at_end_of_sweep(self):
         return [
-            self.energy[i] for i in range(0, len(self.energy), self.number_of_spins)
+            self.energy[i]
+            for i in range(
+                0, len(self.energy), self.number_of_spins * self.sweeps_to_average
+            )
         ]
 
     @property
@@ -159,6 +177,7 @@ class Simulation:
         method=Method.METROPOLIS,
         flip_dynamics=FlipDynamics.SINGLE,
         initial_lattice=None,
+        sweeps_to_average=1,
     ):
         self.name = name
         self.length = length
@@ -174,6 +193,7 @@ class Simulation:
         self.method = method
         self.flip_dynamics = flip_dynamics
         self.number_of_spins = length**dim
+        self.sweeps_to_average = sweeps_to_average
         self.info = self._get_init_info()
         self.current_energy = self._get_energy(self.lattice)
         self.step_made = 0
@@ -202,7 +222,13 @@ class Simulation:
         self.info.to_json(output_file)
 
     def plot_mean_magnetization(self, output_file=None):
-        plt.plot(range(len(self.info.mean_magnetization)), self.info.mean_magnetization)
+        plt.plot(
+            [
+                i * self.sweeps_to_average
+                for i in range(len(self.info.mean_magnetization))
+            ],
+            self.info.mean_magnetization,
+        )
         plt.xlabel("Sweep")
         plt.ylabel("Magnetization")
         if output_file:
@@ -228,6 +254,7 @@ class Simulation:
             energy=[self._get_energy(self.lattice)],
             magnetization=[np.sum(self.lattice)],
             temperature=self.temperature,
+            sweeps_to_average=self.sweeps_to_average,
         )
 
     def _save_step(self, events):
@@ -251,7 +278,7 @@ class Simulation:
             )
             self.info.energy.append(self.current_energy)
 
-        if self.step_made % self.number_of_spins == 0:
+        if self.step_made % (self.number_of_spins * self.sweeps_to_average) == 0:
             self.info.append_correlation(self.lattice, self.length)
 
     def _run_step(self):
@@ -580,6 +607,9 @@ def run_chosen_simulation(
     output_dir=None,
     number_of_initial_sweeps=200,
     number_of_sweeps=10000,
+    temperature=1,
+    initial_state=InitialState.UP,
+    sweeps_to_average=1,
 ):
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -587,13 +617,14 @@ def run_chosen_simulation(
     simulation = Simulation(
         name="metropolis",
         length=512,
-        temperature=1,
+        temperature=temperature,
         magnetic_field=magnetic_field,
         magnetization_coefficient=1,
         dim=1,
-        initial_state=InitialState.UP,
+        initial_state=initial_state,
         method=Method.METROPOLIS,
         flip_dynamics=FlipDynamics.SINGLE,
+        sweeps_to_average=sweeps_to_average,
     )
     simulation.run(number_of_initial_sweeps, should_save=False)
     simulation.run(number_of_sweeps)
@@ -616,6 +647,7 @@ def run_chosen_simulation(
                 )
             )
             simulation.save_results(f"{output_dir}/results.json")
+            simulation.plot_mean_magnetization(f"{output_dir}/mean_magnetization.png")
     else:
         print(f"mean energy: {simulation.info.mean_energy}")
         print(f"specific heat: {simulation.info.specific_heat}")
@@ -655,6 +687,30 @@ def estimate_correlation_length(path, output_file=None):
         plt.show()
 
 
+def steps_to_magnetization(temperature, output_dir, magnetizations):
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    metropolis_simulation = {
+        "name": "metropolis",
+        "length": 512,
+        "temperature": temperature,
+        "magnetic_field": 1,
+        "magnetization_coefficient": 1,
+        "dim": 1,
+        "initial_state": InitialState.RANDOM,
+        "method": Method.METROPOLIS,
+        "flip_dynamics": FlipDynamics.SINGLE,
+    }
+    compare_steps_to_magnetization(
+        [metropolis_simulation],
+        1000,
+        magnetizations,
+        10,
+        output_file=f"{output_dir}/steps_to_magnetization.png" if output_dir else None,
+    )
+
+
 if __name__ == "__main__":
     # run_thermalization_periods()
     # plot_random_step_probability(512, 100, "output/random_step_probability")
@@ -663,10 +719,28 @@ if __name__ == "__main__":
     # run_chosen_simulation(
     #     magnetic_field=0,
     #     output_dir="output/chosen_no_magnetic_field_long",
-    #     number_of_sweeps=200,
-    #     number_of_initial_sweeps=10000,
+    #     number_of_sweeps=10000,
+    #     number_of_initial_sweeps=200,
     # )
-    estimate_correlation_length(
-        "output/chosen_no_magnetic_field_long/results.json",
-        "output/chosen_no_magnetic_field_long/correlation_fit.png",
+    # estimate_correlation_length(
+    #     "output/chosen_no_magnetic_field_long/results.json",
+    #     "output/chosen_no_magnetic_field_long/correlation_fit.png",
+    # )
+    # run_chosen_simulation(
+    #     magnetic_field=1,
+    #     temperature=0.1,
+    #     output_dir="output/sampling/temperature_0.1",
+    #     number_of_sweeps=100,
+    #     number_of_initial_sweeps=0,
+    #     initial_state=InitialState.RANDOM,
+    # )
+    run_chosen_simulation(
+        magnetic_field=1,
+        temperature=10,
+        output_dir="output/sampling/temperature_10",
+        number_of_sweeps=1000,
+        number_of_initial_sweeps=0,
+        initial_state=InitialState.RANDOM,
+        sweeps_to_average=5,
     )
+

@@ -1,0 +1,8 @@
+{
+    "length": 512,
+    "temperature": 0.1,
+    "magnetic_field": 1,
+    "magnetization_coefficient": 1,
+    "number_of_samples": 1000000,
+    "magnetization": 0.140625
+}
