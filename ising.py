@@ -584,7 +584,7 @@ def run_chosen_simulation(output_dir=None):
         flip_dynamics=FlipDynamics.SINGLE,
     )
     simulation.run(200, should_save=False)
-    simulation.run(1000)
+    simulation.run(10000)
     plt.plot(simulation.info.mean_correlation)
     plt.xlabel("Distance")
     plt.ylabel("Correlation")
@@ -613,4 +613,4 @@ if __name__ == "__main__":
     # run_thermalization_periods()
     # plot_random_step_probability(512, 100, "output/random_step_probability")
     # plot_steps_to_magnetization("output/steps_to_magnetization")
-    run_chosen_simulation("output/chosen_simulation_test")
+    run_chosen_simulation("output/chosen_simulation_long")
