@@ -77,6 +77,14 @@ class Info:
         ]
 
     @property
+    def all_mean_magnetization(self):
+        return np.mean(self.mean_magnetization)
+
+    @property
+    def final_mean_magnetization(self):
+        return self.mean_magnetization[-1]
+
+    @property
     def mean_magnetization_at_end_of_sweep(self):
         return [
             self.magnetization[i] / self.number_of_spins
@@ -639,6 +647,8 @@ def run_chosen_simulation(
                 json.dumps(
                     {
                         "mean_energy": simulation.info.mean_energy,
+                        "final_mean_magnetization": simulation.info.final_mean_magnetization,
+                        "mean_magnetization": simulation.info.all_mean_magnetization,
                         "specific_heat": simulation.info.specific_heat,
                         "mean_energy_at_end_of_sweep": simulation.info.mean_energy_at_end_of_sweep,
                         "specific_heat_at_end_of_sweep": simulation.info.specific_heat_at_end_of_sweep,
@@ -743,4 +753,3 @@ if __name__ == "__main__":
         initial_state=InitialState.RANDOM,
         sweeps_to_average=5,
     )
-

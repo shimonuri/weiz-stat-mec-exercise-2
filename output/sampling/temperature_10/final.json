@@ -1,5 +1,7 @@
 {
     "mean_energy": -119.7871735074627,
+    "final_mean_magnetization": 0.1171875,
+    "mean_magnetization": 0.12192917249689053,
     "specific_heat": 2.988930405312777,
     "mean_energy_at_end_of_sweep": -119.46268656716418,
     "specific_heat_at_end_of_sweep": 12.484277121853417
