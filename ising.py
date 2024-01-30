@@ -7,6 +7,7 @@ from typing import List
 import json
 import copy
 import os
+from scipy.optimize import curve_fit
 
 np.random.seed(42)
 plt.rcParams.update({"font.size": 25})
@@ -92,6 +93,10 @@ class Info:
         return np.mean(self.correlation, axis=0)
 
     @property
+    def correlation_length(self):
+        self.mean_correlation
+
+    @property
     def mean_energy(self):
         return np.mean(self.mean_energies)
 
@@ -132,7 +137,9 @@ class Info:
                 json.dumps(
                     {
                         "magnetization": [int(m) for m in self.magnetization],
-                        "mean_magnetization": self.mean_magnetization,
+                        "mean_magnetization": [int(m) for m in self.mean_magnetization],
+                        "energy": [float(e) for e in self.energy],
+                        "mean_correlation": [float(c) for c in self.mean_correlation],
                     },
                     indent=4,
                 )
@@ -568,7 +575,12 @@ def plot_steps_to_magnetization(output_dir=None):
     )
 
 
-def run_chosen_simulation(output_dir=None):
+def run_chosen_simulation(
+    magnetic_field,
+    output_dir=None,
+    number_of_initial_sweeps=200,
+    number_of_sweeps=10000,
+):
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -576,16 +588,16 @@ def run_chosen_simulation(output_dir=None):
         name="metropolis",
         length=512,
         temperature=1,
-        magnetic_field=1,
+        magnetic_field=magnetic_field,
         magnetization_coefficient=1,
         dim=1,
         initial_state=InitialState.UP,
         method=Method.METROPOLIS,
         flip_dynamics=FlipDynamics.SINGLE,
     )
-    simulation.run(200, should_save=False)
-    simulation.run(10000)
-    plt.plot(simulation.info.mean_correlation)
+    simulation.run(number_of_initial_sweeps, should_save=False)
+    simulation.run(number_of_sweeps)
+    plt.plot(simulation.info.mean_correlation[:10])
     plt.xlabel("Distance")
     plt.ylabel("Correlation")
     if output_dir:
@@ -603,9 +615,43 @@ def run_chosen_simulation(output_dir=None):
                     indent=4,
                 )
             )
+            simulation.save_results(f"{output_dir}/results.json")
     else:
         print(f"mean energy: {simulation.info.mean_energy}")
         print(f"specific heat: {simulation.info.specific_heat}")
+        plt.show()
+
+
+def estimate_correlation_length(path, output_file=None):
+    with open(path, "rt") as fd:
+        data = json.loads(fd.read())
+
+    correlation = data["mean_correlation"][:100]
+
+    def curve_fit_func(x, a):
+        return correlation[0] * np.exp(-a * (x - 1))
+
+    distance = np.arange(1, len(correlation) + 1)
+    result = curve_fit(curve_fit_func, distance, correlation)
+    print(f"fit {1 / result[0][0]}")
+    error = np.sqrt(np.diag(result[1]))
+    # plot mean_correlation
+    plt.plot(distance, correlation)
+    plt.plot(
+        distance,
+        curve_fit_func(distance, *result[0]),
+        label=rf"fit ($\xi={1 / result[0][0]:.2f})$",
+        linestyle="--",
+        color="red",
+    )
+    plt.plot()
+    plt.xlabel("Distance")
+    plt.ylabel("Correlation")
+    plt.legend()
+    if output_file:
+        plt.savefig(output_file, bbox_inches="tight")
+        plt.clf()
+    else:
         plt.show()
 
 
@@ -613,4 +659,14 @@ if __name__ == "__main__":
     # run_thermalization_periods()
     # plot_random_step_probability(512, 100, "output/random_step_probability")
     # plot_steps_to_magnetization("output/steps_to_magnetization")
-    run_chosen_simulation("output/chosen_simulation_long")
+    # run_chosen_simulation(magnetic_field=1,"output/chosen_simulation_long")
+    # run_chosen_simulation(
+    #     magnetic_field=0,
+    #     output_dir="output/chosen_no_magnetic_field_long",
+    #     number_of_sweeps=200,
+    #     number_of_initial_sweeps=10000,
+    # )
+    estimate_correlation_length(
+        "output/chosen_no_magnetic_field_long/results.json",
+        "output/chosen_no_magnetic_field_long/correlation_fit.png",
+    )

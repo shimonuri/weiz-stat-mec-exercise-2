@@ -23,7 +23,7 @@ def main_sympy(number_of_spins, magnetic_field, magnetization_coefficient, tempe
     log_partition_function = sympy.log(partition_function)
     energy = -sympy.diff(log_partition_function, beta)
     heat_capacity = sympy.diff(energy, beta) * beta**2
-    correlation_fu
+    correlation_length = 1 / (sympy.ln(sympy.coth(beta * magnetization_coefficient)))
     print(f"Energy: {float(energy.subs({beta: 1/temperature}))}")
     print(f"Specific heat capacity: {float(heat_capacity.subs({beta: 1/temperature}))}")
     print(
