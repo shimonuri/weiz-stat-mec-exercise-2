@@ -55,6 +55,7 @@ class Info:
     magnetization: List[int]
     energy: List[float]
     number_of_spins: int
+    correlation: List[np.ndarray] = dataclasses.field(default_factory=list)
 
     @property
     def mean_magnetization(self):
@@ -64,15 +65,34 @@ class Info:
             for i in range(0, len(self.magnetization), self.number_of_spins)
         ]
 
-    def mean_energy(self):
+    @property
+    def mean_energies(self):
         return [
             np.mean(self.energy[i : i + self.number_of_spins])
             for i in range(0, len(self.energy), self.number_of_spins)
         ]
 
     @property
+    def mean_correlation(self):
+        # mean between all the correlations
+        return np.mean(self.correlation, axis=0)
+
+    @property
+    def mean_energy(self):
+        return np.mean(self.mean_energies)
+
+    @property
+    def specific_heat(self):
+        return np.var(self.mean_energies)
+
+    @property
     def mean_magnetization_per_step(self):
         return [m / self.number_of_spins for m in self.magnetization]
+
+    def append_correlation(self, lattice, max_size):
+        self.correlation.append(
+            np.array([np.mean(lattice * np.roll(lattice, x)) for x in range(max_size)])
+        )
 
     def get_number_of_steps_to_mean_magnetization(self, mean_magnetization):
         # return the number of steps to reach the given magnetization
@@ -125,10 +145,12 @@ class Simulation:
         self.number_of_spins = length**dim
         self.info = self._get_init_info()
         self.current_energy = self._get_energy(self.lattice)
+        self.step_made = 0
 
     def run(self, number_of_sweeps):
         for _ in range(number_of_sweeps * self.number_of_spins):
             self._run_step()
+            self.step_made += 1
 
     def show_lattice(self, output_file=None):
         if self.dim == 1:
@@ -157,7 +179,7 @@ class Simulation:
             plt.show()
 
     def plot_mean_energy(self, output_file=None):
-        mean_energy = self.info.mean_energy()
+        mean_energy = self.info.mean_energies()
         plt.plot(range(len(mean_energy)), mean_energy)
         plt.xlabel("Sweep")
         plt.ylabel("Energy")
@@ -194,6 +216,9 @@ class Simulation:
                 + 2 * np.sum([spin_flip.new_value for spin_flip in spin_flip_events])
             )
             self.info.energy.append(self.current_energy)
+
+        if self.step_made % self.number_of_spins == 0:
+            self.info.append_correlation(self.lattice, self.length)
 
     def _run_step(self):
         if self.method == Method.METROPOLIS:
@@ -240,15 +265,8 @@ class Simulation:
             return self._get_energy(event.new_lattice) - self.current_energy
 
     def _get_flip_spin_energy_diff(self, spin_flip):
-        if spin_flip.spin == 0:
-            prev_spin = 0
-            next_spin = self.lattice[spin_flip.spin + 1]
-        elif spin_flip.spin == self.length - 1:
-            prev_spin = self.lattice[spin_flip.spin - 1]
-            next_spin = 0
-        else:
-            prev_spin = self.lattice[spin_flip.spin - 1]
-            next_spin = self.lattice[spin_flip.spin + 1]
+        next_spin = self.lattice[(spin_flip.spin + 1) % self.length]
+        prev_spin = self.lattice[spin_flip.spin - 1]
         energy_diff = 2 * (
             self.magnetic_field * spin_flip.old_value
             + self.magnetization_coefficient
@@ -521,7 +539,10 @@ def plot_steps_to_magnetization(output_dir=None):
     )
 
 
-def run_chosen_simulation():
+def run_chosen_simulation(output_dir=None):
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
     simulation = Simulation(
         name="metropolis",
         length=512,
@@ -533,13 +554,31 @@ def run_chosen_simulation():
         method=Method.METROPOLIS,
         flip_dynamics=FlipDynamics.SINGLE,
     )
-    simulation.run(20)
-    # simulation.plot_mean_magnetization()
-    print(np.mean(simulation.info.mean_energy()))
+    simulation.run(1000)
+    plt.plot(simulation.info.mean_correlation)
+    plt.xlabel("Distance")
+    plt.ylabel("Correlation")
+    if output_dir:
+        plt.savefig(f"{output_dir}/correlation.png", bbox_inches="tight")
+        plt.clf()
+        with open(f"{output_dir}/final.json", "wt") as fd:
+            fd.write(
+                json.dumps(
+                    {
+                        "mean_energy": simulation.info.mean_energy,
+                        "specific_heat": simulation.info.specific_heat,
+                    },
+                    indent=4,
+                )
+            )
+    else:
+        print(f"mean energy: {simulation.info.mean_energy}")
+        print(f"specific heat: {simulation.info.specific_heat}")
+        plt.show()
 
 
 if __name__ == "__main__":
     # run_thermalization_periods()
     # plot_random_step_probability(512, 100, "output/random_step_probability")
     # plot_steps_to_magnetization("output/steps_to_magnetization")
-    run_chosen_simulation()
+    run_chosen_simulation("output/chosen_simulation")
