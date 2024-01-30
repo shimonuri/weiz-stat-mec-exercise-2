@@ -1,4 +1,6 @@
 {
-    "mean_energy": -1015.0592353981687,
-    "specific_heat": 44.367755108417214
+    "mean_energy": -1014.8820798340332,
+    "specific_heat": 44.325704500415796,
+    "mean_energy_at_end_of_sweep": -1014.8842231553689,
+    "specific_heat_at_end_of_sweep": 57.13696564826206
 }

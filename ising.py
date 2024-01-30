@@ -67,9 +67,23 @@ class Info:
         ]
 
     @property
+    def mean_magnetization_at_end_of_sweep(self):
+        return [
+            self.magnetization[i] / self.number_of_spins
+            for i in range(0, len(self.magnetization), self.number_of_spins)
+        ]
+
+    @property
     def mean_energies(self):
         return [
             np.mean(self.energy[i : i + self.number_of_spins])
+            for i in range(0, len(self.energy), self.number_of_spins)
+        ]
+
+    @property
+    def mean_energies_at_end_of_sweep(self):
+        return [
+            self.energy[i]
             for i in range(0, len(self.energy), self.number_of_spins)
         ]
 
@@ -80,11 +94,19 @@ class Info:
 
     @property
     def mean_energy(self):
-        return np.mean(self.mean_energies[100:])
+        return np.mean(self.mean_energies)
+
+    @property
+    def mean_energy_at_end_of_sweep(self):
+        return np.mean(self.mean_energies_at_end_of_sweep)
 
     @property
     def specific_heat(self):
         return np.var(self.mean_energies) / (self.temperature**2)
+
+    @property
+    def specific_heat_at_end_of_sweep(self):
+        return np.var(self.mean_energies_at_end_of_sweep) / (self.temperature**2)
 
     @property
     def mean_magnetization_per_step(self):
@@ -559,7 +581,7 @@ def run_chosen_simulation(output_dir=None):
         flip_dynamics=FlipDynamics.SINGLE,
     )
     simulation.run(200, should_save=False)
-    simulation.run(1000)
+    simulation.run(5000)
     plt.plot(simulation.info.mean_correlation)
     plt.xlabel("Distance")
     plt.ylabel("Correlation")
@@ -572,6 +594,8 @@ def run_chosen_simulation(output_dir=None):
                     {
                         "mean_energy": simulation.info.mean_energy,
                         "specific_heat": simulation.info.specific_heat,
+                        "mean_energy_at_end_of_sweep": simulation.info.mean_energy_at_end_of_sweep,
+                        "specific_heat_at_end_of_sweep": simulation.info.specific_heat_at_end_of_sweep,
                     },
                     indent=4,
                 )
