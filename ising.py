@@ -83,8 +83,7 @@ class Info:
     @property
     def mean_energies_at_end_of_sweep(self):
         return [
-            self.energy[i]
-            for i in range(0, len(self.energy), self.number_of_spins)
+            self.energy[i] for i in range(0, len(self.energy), self.number_of_spins)
         ]
 
     @property
@@ -114,7 +113,9 @@ class Info:
 
     def append_correlation(self, lattice, max_size):
         self.correlation.append(
-            np.array([np.mean(lattice * np.roll(lattice, x)) for x in range(max_size)])
+            np.array(
+                [np.mean(lattice * np.roll(lattice, x)) for x in range(1, max_size)]
+            )
         )
 
     def get_number_of_steps_to_mean_magnetization(self, mean_magnetization):
@@ -302,9 +303,11 @@ class Simulation:
         return float(energy_diff)
 
     def _get_energy(self, spins):
-        return -self.magnetic_field * np.sum(
+        energy = -self.magnetic_field * np.sum(
             spins
         ) - self.magnetization_coefficient * np.sum(spins * np.roll(spins, 1, axis=0))
+
+        return energy
 
     def _accept_event(self, event, energy_diff):
         event.accept(self)
@@ -581,7 +584,7 @@ def run_chosen_simulation(output_dir=None):
         flip_dynamics=FlipDynamics.SINGLE,
     )
     simulation.run(200, should_save=False)
-    simulation.run(5000)
+    simulation.run(1000)
     plt.plot(simulation.info.mean_correlation)
     plt.xlabel("Distance")
     plt.ylabel("Correlation")
@@ -610,4 +613,4 @@ if __name__ == "__main__":
     # run_thermalization_periods()
     # plot_random_step_probability(512, 100, "output/random_step_probability")
     # plot_steps_to_magnetization("output/steps_to_magnetization")
-    run_chosen_simulation("output/chosen_simulation")
+    run_chosen_simulation("output/chosen_simulation_test")
