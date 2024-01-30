@@ -13,27 +13,26 @@ class BoltzmannSampler:
         temperature,
         magnetic_field,
         magnetization_coefficient,
+        interval=1000,
     ):
         self.name = name
         self.length = length
         self.temperature = temperature
         self.magnetic_field = magnetic_field
         self.magnetization_coefficient = magnetization_coefficient
+        self.interval = interval
 
     def sample(self, number_of_samples):
         partition_function = 0
         magnetization_sums = {}
         magnetization_sum = 0
         for i in range(number_of_samples):
-            if i % int(number_of_samples / 10) == 0:
-                print(f"Sampled {i} times")
-
+            if i % int(self.interval) == 0:
                 if i != 0:
                     current_magnetization_sum = float(
                         magnetization_sum / partition_function
                     )
                     magnetization_sums[i] = current_magnetization_sum
-                    print(f"Mean magnetization: {current_magnetization_sum}")
 
             lattice = np.random.choice([-1, 1], size=self.length)
             boltzmann_factor = sympy.exp(
@@ -99,12 +98,12 @@ if __name__ == "__main__":
     main(
         length=512,
         temperature=0.1,
-        number_of_samples=10**4,
+        number_of_samples=10**5,
         output_dir="output/sampler/low_temperature",
     )
     main(
         length=512,
         temperature=10,
-        number_of_samples=10**4,
+        number_of_samples=10**5,
         output_dir="output/sampler/high_temperature",
     )
