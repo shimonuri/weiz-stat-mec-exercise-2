@@ -722,28 +722,28 @@ def steps_to_magnetization(temperature, output_dir, magnetizations):
 
 
 if __name__ == "__main__":
-    # run_thermalization_periods()
-    # plot_random_step_probability(512, 100, "output/random_step_probability")
-    # plot_steps_to_magnetization("output/steps_to_magnetization")
-    # run_chosen_simulation(magnetic_field=1,"output/chosen_simulation_long")
-    # run_chosen_simulation(
-    #     magnetic_field=0,
-    #     output_dir="output/chosen_no_magnetic_field_long",
-    #     number_of_sweeps=10000,
-    #     number_of_initial_sweeps=200,
-    # )
-    # estimate_correlation_length(
-    #     "output/chosen_no_magnetic_field_long/results.json",
-    #     "output/chosen_no_magnetic_field_long/correlation_fit.png",
-    # )
-    # run_chosen_simulation(
-    #     magnetic_field=1,
-    #     temperature=0.1,
-    #     output_dir="output/sampling/temperature_0.1",
-    #     number_of_sweeps=100,
-    #     number_of_initial_sweeps=0,
-    #     initial_state=InitialState.RANDOM,
-    # )
+    run_thermalization_periods()
+    plot_random_step_probability(512, 100, "output/random_step_probability")
+    plot_steps_to_magnetization("output/steps_to_magnetization")
+    run_chosen_simulation(magnetic_field=1, output_dir="output/chosen_simulation_long")
+    run_chosen_simulation(
+        magnetic_field=0,
+        output_dir="output/chosen_no_magnetic_field_long",
+        number_of_sweeps=10000,
+        number_of_initial_sweeps=200,
+    )
+    estimate_correlation_length(
+        "output/chosen_no_magnetic_field_long/results.json",
+        "output/chosen_no_magnetic_field_long/correlation_fit.png",
+    )
+    run_chosen_simulation(
+        magnetic_field=1,
+        temperature=0.1,
+        output_dir="output/sampling/temperature_0.1",
+        number_of_sweeps=100,
+        number_of_initial_sweeps=0,
+        initial_state=InitialState.RANDOM,
+    )
     run_chosen_simulation(
         magnetic_field=1,
         temperature=10,
