@@ -63,7 +63,7 @@ def get_zeros(magnetization_coefficient, number_of_spins):
 
 
 if __name__ == "__main__":
-    # plot_zeros(
-    #     magnetization_coefficient=1, number_of_spins=1000, output_dir="output/yang_lee/"
-    # )
+    plot_zeros(
+        magnetization_coefficient=1, number_of_spins=1000, output_dir="output/yang_lee/"
+    )
     plot_convergence_to_zero(magnetization_coefficient=1, output_dir="output/yang_lee/")
